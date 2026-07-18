@@ -69,4 +69,4 @@ Al exportar workflows de n8n, las credenciales guardadas NO se exportan — pero
 
 ## Autor
 
-**Axel Mestanza** — [LinkedIn](https://www.linkedin.com/in/axel-mestanza-920a071b9/) · [Perfil](https://github.com/axelsmith11)
+**Axel Mestanza** — [LinkedIn](https://www.linkedin.com/in/axelmestanza/) · [Perfil](https://github.com/axelsmith11)
