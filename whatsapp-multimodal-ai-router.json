@@ -1,0 +1,256 @@
+{
+  "name": "WhatsApp Multimodal AI Router (Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-inbound",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Webhook WhatsApp"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detecta el tipo de mensaje entrante de WhatsApp Cloud API\n// Soporta: texto, audio (nota de voz), imagen y documento (PDF)\nconst mensaje = $json.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0] || {};\nlet tipo = 'desconocido';\n\nif (mensaje.text) tipo = 'text';\nelse if (mensaje.image) tipo = 'image';\nelse if (mensaje.audio) tipo = 'audio';\nelse if (mensaje.document) tipo = 'document';\n\nreturn [{\n  json: {\n    tipo_mensaje: tipo,\n    wa_id: mensaje.from || null,\n    mensaje\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Detectar Tipo"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo_mensaje }}",
+                    "rightValue": "text",
+                    "operator": { "type": "string", "operation": "equals" },
+                    "id": "b1000000-0000-4000-8000-000000000001"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo_mensaje }}",
+                    "rightValue": "audio",
+                    "operator": { "type": "string", "operation": "equals" },
+                    "id": "b1000000-0000-4000-8000-000000000002"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voz"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo_mensaje }}",
+                    "rightValue": "image",
+                    "operator": { "type": "string", "operation": "equals" },
+                    "id": "b1000000-0000-4000-8000-000000000003"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Foto"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipo_mensaje }}",
+                    "rightValue": "document",
+                    "operator": { "type": "string", "operation": "equals" },
+                    "id": "b1000000-0000-4000-8000-000000000004"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [440, 0],
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Router Multimodal"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.mensaje.audio?.id || $json.mensaje.image?.id || $json.mensaje.document?.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 120],
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Obtener URL del Media",
+      "notesInFlow": true,
+      "notes": "Credencial: Header Auth -> Authorization: Bearer <TU_TOKEN_META>. NUNCA pegues el token en la URL."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 120],
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Descargar Media"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
+            { "name": "model", "value": "whisper-1" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 120],
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Transcribir con Whisper",
+      "notesInFlow": true,
+      "notes": "Credencial: Header Auth -> Authorization: Bearer <TU_OPENAI_KEY>"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o', messages: [ { role: 'system', content: 'Eres un asistente que analiza imagenes. Describe el contenido y, si contiene datos estructurados (montos, fechas, nombres), devuelvelos SOLO como JSON valido con las claves: descripcion, datos_detectados.' }, { role: 'user', content: [ { type: 'text', text: $json.mensaje?.image?.caption || 'Analiza esta imagen' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + $binary.data.toString('base64') } } ] } ] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 280],
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Analizar Imagen (GPT-4o Vision)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraccion de texto de PDF (placeholder)\n// Opcion A: usa el nodo nativo 'Extract From File' de n8n\n// Opcion B: envia el binario a tu servicio de extraccion\nreturn [{ json: { texto_extraido: '<< conecta aqui tu extractor de PDF >>', ...$json } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 440],
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Extraer Texto PDF"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [ { role: 'system', content: 'Clasifica la intencion del usuario y responde SOLO con JSON valido: { \"intencion\": string, \"respuesta\": string }. Sin markdown, sin texto extra.' }, { role: 'user', content: $json.text || $json.texto_extraido || $json.mensaje?.text?.body || JSON.stringify($json.choices?.[0]?.message?.content || '') } ] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "name": "Clasificar Intencion (LLM)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parseo seguro del JSON del LLM: limpia fences de markdown y valida\nconst FENCE = String.fromCharCode(96).repeat(3);\nlet raw = $json.choices?.[0]?.message?.content ?? $json.content ?? '';\n\nraw = String(raw)\n  .replace(new RegExp(FENCE + 'json', 'gi'), '')\n  .replace(new RegExp(FENCE, 'g'), '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (e) {\n  // Fallback controlado: nunca dejes que un JSON malformado tumbe el flujo\n  parsed = {\n    intencion: 'error_parseo',\n    respuesta: 'No pude procesar tu mensaje, puedes reformularlo?',\n    _raw: raw.slice(0, 500)\n  };\n}\n\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "name": "Parseo JSON Seguro"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/<TU_PHONE_NUMBER_ID>/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Detectar Tipo').item.json.wa_id, type: 'text', text: { body: $json.respuesta } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0],
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "name": "Responder por WhatsApp",
+      "notesInFlow": true,
+      "notes": "Reemplaza <TU_PHONE_NUMBER_ID>. Credencial: Header Auth con tu token de Meta."
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": { "main": [[{ "node": "Detectar Tipo", "type": "main", "index": 0 }]] },
+    "Detectar Tipo": { "main": [[{ "node": "Router Multimodal", "type": "main", "index": 0 }]] },
+    "Router Multimodal": {
+      "main": [
+        [{ "node": "Clasificar Intencion (LLM)", "type": "main", "index": 0 }],
+        [{ "node": "Obtener URL del Media", "type": "main", "index": 0 }],
+        [{ "node": "Obtener URL del Media", "type": "main", "index": 0 }],
+        [{ "node": "Obtener URL del Media", "type": "main", "index": 0 }]
+      ]
+    },
+    "Obtener URL del Media": { "main": [[{ "node": "Descargar Media", "type": "main", "index": 0 }]] },
+    "Descargar Media": {
+      "main": [[
+        { "node": "Transcribir con Whisper", "type": "main", "index": 0 },
+        { "node": "Analizar Imagen (GPT-4o Vision)", "type": "main", "index": 0 },
+        { "node": "Extraer Texto PDF", "type": "main", "index": 0 }
+      ]]
+    },
+    "Transcribir con Whisper": { "main": [[{ "node": "Clasificar Intencion (LLM)", "type": "main", "index": 0 }]] },
+    "Analizar Imagen (GPT-4o Vision)": { "main": [[{ "node": "Clasificar Intencion (LLM)", "type": "main", "index": 0 }]] },
+    "Extraer Texto PDF": { "main": [[{ "node": "Clasificar Intencion (LLM)", "type": "main", "index": 0 }]] },
+    "Clasificar Intencion (LLM)": { "main": [[{ "node": "Parseo JSON Seguro", "type": "main", "index": 0 }]] },
+    "Parseo JSON Seguro": { "main": [[{ "node": "Responder por WhatsApp", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" }
+}
