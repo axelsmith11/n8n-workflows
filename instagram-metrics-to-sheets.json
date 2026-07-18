@@ -1,0 +1,74 @@
+{
+  "name": "Instagram Metrics to Google Sheets (Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "triggerAtHour": 7 }] }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "name": "Cada dia 7am"
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v21.0/TU_IG_BUSINESS_ID/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "id,caption,media_type,media_product_type,timestamp,permalink,like_count,comments_count" },
+            { "name": "limit", "value": "50" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0],
+      "id": "d1000000-0000-4000-8000-000000000002",
+      "name": "Obtener publicaciones IG",
+      "notesInFlow": true,
+      "notes": "Reemplaza TU_IG_BUSINESS_ID. Credencial: Header Auth -> Authorization: Bearer <TOKEN_META>. Nunca pegues el token en la URL."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aplana la respuesta del Graph API a filas listas para Sheets\nconst posts = $json.data || [];\n\nreturn posts.map(p => {\n  const fecha = p.timestamp ? p.timestamp.slice(0, 10) : '';\n  const hora = p.timestamp ? p.timestamp.slice(11, 16) : '';\n  const likes = p.like_count ?? 0;\n  const comentarios = p.comments_count ?? 0;\n\n  return {\n    json: {\n      id: p.id,\n      fecha,\n      hora,\n      tipo: p.media_product_type || p.media_type,\n      caption: (p.caption || '').slice(0, 200),\n      likes,\n      comentarios,\n      engagement: likes + comentarios,\n      link: p.permalink\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "id": "d1000000-0000-4000-8000-000000000003",
+      "name": "Aplanar metricas"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": { "__rl": true, "value": "TU_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "publicaciones", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": ["id"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [720, 0],
+      "id": "d1000000-0000-4000-8000-000000000004",
+      "name": "Guardar en Sheets",
+      "notesInFlow": true,
+      "notes": "appendOrUpdate con matching por id: cada corrida actualiza metricas de posts existentes y agrega los nuevos (idempotente)."
+    }
+  ],
+  "connections": {
+    "Cada dia 7am": { "main": [[{ "node": "Obtener publicaciones IG", "type": "main", "index": 0 }]] },
+    "Obtener publicaciones IG": { "main": [[{ "node": "Aplanar metricas", "type": "main", "index": 0 }]] },
+    "Aplanar metricas": { "main": [[{ "node": "Guardar en Sheets", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" }
+}
