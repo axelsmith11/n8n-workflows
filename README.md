@@ -36,6 +36,33 @@ Webhook → Detectar tipo → Router
 
 > 💡 Este patrón es la base de asistentes conversacionales como **Pablo** ([usapablo.com](https://usapablo.com)), que proceso +500 usuarios activos en producción.
 
+### 2. Telegram AI Data Agent
+
+[⬇️ Descargar JSON](./telegram-ai-data-agent.json)
+
+Agente de IA conversacional por Telegram que consulta tus datos en Google Sheets mediante **tools** y responde con analisis accionables.
+
+- **Agente con herramientas**: 3 Google Sheets tools (registros, ranking, resumen) que el LLM consulta segun la intencion de la pregunta.
+- **Memoria de conversacion** (buffer window) para dar seguimiento al hilo.
+- **Guard de acceso**: valida el chat ID antes de procesar — nadie mas puede usar tu bot ni gastar tus tokens.
+- **Prompt disciplinado**: respuestas de max 80 palabras, cada afirmacion con numero, sin inventar datos (consulta tools siempre).
+
+**Setup**: credenciales de Telegram Bot + OpenAI + Google Sheets OAuth, reemplaza TU_SPREADSHEET_ID y tu chat ID en el guard.
+
+### 3. Instagram Metrics → Google Sheets
+
+[⬇️ Descargar JSON](./instagram-metrics-to-sheets.json)
+
+Pipeline programado que trae las metricas de una cuenta de Instagram Business (Graph API) y las guarda en Google Sheets, listo para alimentar dashboards o agentes como el anterior.
+
+- **Schedule diario** → Graph API (likes, comentarios, tipo, fecha) → transformacion → Sheets.
+- **Idempotente**: appendOrUpdate con matching por id — corre mil veces sin duplicar filas.
+- **Seguro**: token de Meta via credencial Header Auth, nunca en la URL.
+
+**Setup**: reemplaza TU_IG_BUSINESS_ID y TU_SPREADSHEET_ID, crea la credencial Header Auth.
+
+> 💡 Estos dos templates juntos forman el patron **data pipeline + agente**: el pipeline alimenta las hojas y el agente las consulta por chat.
+
 ## 🔒 Nota de seguridad
 
 Al exportar workflows de n8n, las credenciales guardadas NO se exportan — pero **cualquier token hardcodeado en URLs o headers SÍ**. Antes de compartir un export, búscalo con: `grep -iE "bearer |access_token|api_key" workflow.json`
